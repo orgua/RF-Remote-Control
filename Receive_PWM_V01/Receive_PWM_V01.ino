@@ -53,21 +53,21 @@ ISR(ADC_vect)
     adcDone = true;
 }
 
-#ifdef USE_PWM
-#include <Servo.h>
-#define SERVOS     8
-#define SERVOMIN 1000
-#define SERVOMAX 2000
-Servo   servoA;
-Servo   servoB;
-Servo   servoC;
-Servo   servoD;
+#ifdef      USE_PWM
+#include    <Servo.h>
+#define     SERVOS      8
+#define     SERVOMIN    500
+#define     SERVOMAX    2000
+Servo       servoA;
+Servo       servoB;
+Servo       servoC;
+Servo       servoD;
 
-Servo   servoE;
-Servo   servoF;
-Servo   servoG;
-Servo   servoH;
-#endif // USE_PWM
+Servo       servoE;
+Servo       servoF;
+Servo       servoG;
+Servo       servoH;
+#endif      // USE_PWM
 
 
 #include <atmel_eFunction.h>
@@ -176,15 +176,6 @@ void setup()
     servoG.attach(7,SERVOMIN,SERVOMAX);
     servoH.attach(9,SERVOMIN,SERVOMAX);
 
-    servoA.writeMicroseconds(SERVOMIN);
-    servoB.writeMicroseconds(SERVOMIN);
-    servoC.writeMicroseconds(SERVOMIN);
-    servoD.writeMicroseconds(SERVOMIN);
-    servoE.writeMicroseconds(SERVOMIN);
-    servoF.writeMicroseconds(SERVOMIN);
-    servoG.writeMicroseconds(SERVOMIN);
-    servoH.writeMicroseconds(SERVOMIN);
-
     for (uint8_t ivar = 0; ivar < ANALOG_CHANNELS; ivar++)
     {
         msg_valid.analog[ivar] = STDVALUE;
@@ -290,16 +281,15 @@ loop_start:
         //  CH2 L V ObenPlus
         //  CH3 L H RechtsMinus
 
-      servoA.writeMicroseconds(eFkt.get(servo[0])); // roll - normal
-      servoB.writeMicroseconds(eFkt.get(servo[1])); // pitch - normal
-      servoC.writeMicroseconds((servo[2])); // throttle - normal
-      servoD.writeMicroseconds(eFkt.get(servo[3])); // YAW - inverted
+        servoA.writeMicroseconds(1000 + eFkt.get(servo[0])); // TODO: has to be between 1100 and 1900, now: 1250
+        servoB.writeMicroseconds(1000 + eFkt.get(servo[1]));
+        servoC.writeMicroseconds(1000 + servo[2]);
+        servoD.writeMicroseconds(1000 + eFkt.get(servo[3]));
 
-      servoE.writeMicroseconds((servo[5])); //
-      servoF.writeMicroseconds(1000+512); //
-      servoG.writeMicroseconds(1000+512);
-      servoH.writeMicroseconds(1000+512);
-
+        servoE.writeMicroseconds(1000 + servo[5]);
+        servoF.writeMicroseconds(1000 + 512);
+        servoG.writeMicroseconds(1000 + 512);
+        servoH.writeMicroseconds(1000 + 512);
 
         time2ctrl_min   = loop_time + CONTROL_INTERVALL_MIN;
         time2ctrl_max   = loop_time + CONTROL_INTERVALL_MAX;
