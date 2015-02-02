@@ -76,6 +76,8 @@ uint8_t rf12_handle()
     msg_valid.counter   = msg_received->counter+1;
 #endif
 
+    // TODO: make shure that there will be no loop when using >1 repeater!
+
     // strncpy((char*) &msg_valid,(char*) msg_received, msg_size); // doenst work as expected / skips bytes?
     msg_valid.com       = msg_received->com;
     //msg_valid.counter   = msg_received->counter; // Counter-Copy is above
