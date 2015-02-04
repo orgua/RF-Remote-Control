@@ -27,7 +27,7 @@
 #define NODE_SLAVE              (NODE_MASTER+1)
 
 #define MESSAGE_INTERVALL_MIN   (16<<2) // 64
-#define MESSAGE_INTERVALL_MAX   500 // (16<<5)=512
+#define MESSAGE_INTERVALL_MAX   1000 // (16<<5)=512
 
 //#define USE_VCCSTARTCHECK
 #define VCC_MIN                 2500 // mV
@@ -38,6 +38,7 @@
 #define ANALOG_CHANNELS         1 // number of channels to transmit
 #define ANALOG_JITTER           3
 #define ANALOG_SAFEZONE         100
+#define ANALOG_DEADZONE         30      // for ignoring small drifts (around zero)
 
 // Config for module ArduNode
 #define PIN_VCC                 A5
@@ -157,14 +158,15 @@ void setup()
     loop_time     = millis();
     time2send_min = loop_time + MESSAGE_INTERVALL_MIN;
     time2send_max = loop_time + MESSAGE_INTERVALL_MAX;
-    time2powerOff = loop_time + POWEROFF_INTERVALL;
+    time2powerOff = loop_time; // instantly go to poweroff
 
     pinMode(        PIN_LED,    OUTPUT);    // help to see if node started up right (short blink)
     digitalWrite(   PIN_LED,    HIGH);
 
     // init Pins
-    msg_send.analog[0]   = analogRead(PIN_POTI_ANALOG) + ANALOG_SAFEZONE;
-    msg_old.analog[0]    = msg_send.analog[0];
+    msg_send.analog[0]  = analogRead(PIN_POTI_ANALOG) + ANALOG_SAFEZONE;
+    msg_old.analog[0]   = msg_send.analog[0];
+    msg_send.vcc        = atmel.readVcc();
 
     // Attempt to save power --> not success so far
     DIDR0 = 0xFF & ~((1<<PIN_SWITCH_ANALOG) | (1<<PIN_POTI_ANALOG));
@@ -242,16 +244,18 @@ loop_start:
             sleep_intervall = MESSAGE_INTERVALL_MIN;
         }
 
+        if (mustSend) // slowly increase sleepcycles
+        {
+            if (sleep_intervall < 256) sleep_intervall = sleep_intervall<<1;
+        }
+
         if (shouldSend)
         {
             mustSend        = 1;
             couldSend       = 0;
             shouldSend--;
         }
-        else
-        {
-            if (sleep_intervall < 256) sleep_intervall = sleep_intervall<<1;
-        }
+
     }
 
     if (mustSend)
@@ -312,6 +316,16 @@ loop_start:
         PRR &= ~(1<<0); // enable ADC
         ADCSRA |= bit(ADEN); // enable ADC (last Step)
         msg_send.vcc        = atmel.readVcc();
+        // wait till device is unpressed
+        while(analogRead(PIN_POTI_ANALOG)>ANALOG_DEADZONE)
+        {
+            digitalWrite(PIN_VCC, LOW);
+            Sleepy::watchdogInterrupts(6); // 0..9 corresponds to roughly 16..8192 ms
+            Sleepy::powerDown();
+            Sleepy::watchdogInterrupts(-1);
+            digitalWrite(PIN_VCC, HIGH);
+        }
+        time2powerOff   = millis() + POWEROFF_INTERVALL;
     }
     else    loseDirectTime(sleep_intervall);
 #endif // USE_POWEROFF

@@ -40,12 +40,16 @@
 			<Add after="srec_cat $(TARGET_OUTPUT_DIR)$(TARGET_OUTPUT_BASENAME).fuse -Intel -crop 0x01 0x02 -offset -0x01 -O $(TARGET_OUTPUT_DIR)$(TARGET_OUTPUT_BASENAME).hfs -Intel " />
 			<Add after="srec_cat $(TARGET_OUTPUT_DIR)$(TARGET_OUTPUT_BASENAME).fuse -Intel -crop 0x02 0x03 -offset -0x02 -O $(TARGET_OUTPUT_DIR)$(TARGET_OUTPUT_BASENAME).efs -Intel " />
 		</ExtraCommands>
-		<Unit filename="../Receive_KKSpektrum_V01/Receive_KKSpektrum_V01.ino" />
-		<Unit filename="../Receive_PWM_V01/Receive_PWM_V01.ino" />
-		<Unit filename="../Receive_eSkate_V01/Receive_eSkate_V01.ino" />
-		<Unit filename="../Repeat_V01/Repeat_V01.ino" />
-		<Unit filename="../Send_LowPower_V01/Send_LowPower_V01.ino" />
-		<Unit filename="../Send_V01/Send_V01.ino" />
+		<Unit filename="ArduSensorNode.pdf" />
+		<Unit filename="README.md" />
+		<Unit filename="Receive_KKSpektrum_V01/Receive_KKSpektrum_V01.ino" />
+		<Unit filename="Receive_PWM_V01/Receive_PWM_V01.ino" />
+		<Unit filename="Receive_eSkate_V01/Receive_eSkate_V01.ino" />
+		<Unit filename="Repeat_V01/Repeat_V01.ino" />
+		<Unit filename="Send_V01/Send_V01.ino" />
+		<Unit filename="Send_eSkate_V01/Consumption_wake_and_transmit_(mV are uA).png" />
+		<Unit filename="Send_eSkate_V01/Consumption_wake_without_transmit_(mV are uA).png" />
+		<Unit filename="Send_eSkate_V01/Send_eSkate_V01.ino" />
 		<Extensions>
 			<code_completion />
 			<envvars />
