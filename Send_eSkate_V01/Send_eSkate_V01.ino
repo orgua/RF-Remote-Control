@@ -309,6 +309,8 @@ loop_start:
             digitalWrite(PIN_VCC, HIGH);
         }
         // read vcc and store it for this wake-period
+        PRR &= ~(1<<0); // enable ADC
+        ADCSRA |= bit(ADEN); // enable ADC (last Step)
         msg_send.vcc        = atmel.readVcc();
     }
     else    loseDirectTime(sleep_intervall);

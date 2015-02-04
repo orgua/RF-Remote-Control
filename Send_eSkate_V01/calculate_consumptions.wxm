@@ -1,0 +1,20 @@
+/* [wxMaxima batch file version 1] [ DO NOT EDIT BY HAND! ]*/
+/* [ Created with wxMaxima version 11.08.0 ] */
+
+/* [wxMaxima: input   start ] */
+wake: 10*500 + 1*800 + 0.050*1900;
+transmit: wake + 2*800 + 5*1800;
+
+wake_mW: 3*wake/(1000^3);
+transmit_mW: 3*transmit/(1000^3);
+
+aMin: 2*wake_mW + 2*transmit_mW;
+aMax: (1/0.032)*transmit_mW;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+CR2025: 0.150*3*60*60;
+/* [wxMaxima: input   end   ] */
+
+/* Maxima can't load/batch files which end with a comment! */
+"Created with wxMaxima"$
