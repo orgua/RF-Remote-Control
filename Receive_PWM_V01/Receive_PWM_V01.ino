@@ -150,10 +150,6 @@ uint32_t    time2ctrl_min, time2ctrl_max;
 void setup()
 {
 
-#ifdef USE_SPEKTRUM
-    spektrumSerial_init();
-#endif // USE_SPEKTRUM
-
 #ifdef USE_SERIAL
     Serial.begin(115200);
 #endif // USE_SERIAL
