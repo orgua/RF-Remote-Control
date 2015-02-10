@@ -8,22 +8,22 @@
 #define ANALOG_CHANNELS         6       // nr of channels
 #define ANALOG_JITTER           2       // small changes won't trigger fast sending
 #define ANALOG_SAFEZONE         100     // better use of uint16 (move away from 0)
-#define ANALOG_DEADZONE         8      // for ignoring small drifts (around zero)
+#define ANALOG_DEADZONE         8       // for ignoring small drifts (around zero)
 #define STDVALUE                512     // middle of [0...1023]
 
 #define PIN_LED                 8
 
 #ifdef USE_SERIAL
 #define CONTROL_INTERVALL_MIN   50      // for debug
-#define CONTROL_INTERVALL_MAX   500
+#define CONTROL_INTERVALL_MAX   500L
 #else
-#define CONTROL_INTERVALL_MIN   10      // 7-10 produziert stottern
-#define CONTROL_INTERVALL_MAX   50     // test: 20/50
+#define CONTROL_INTERVALL_MIN   11      //
+#define CONTROL_INTERVALL_MAX   11L      // DSMX2 seems to be 11 or 22ms apart
 #endif // USE_SERIAL
 
-#define ERROR_TIME_MS           4000L
-#define ERROR_THRESHOLD         (ERROR_TIME_MS/CONTROL_INTERVALL_MAX)
-#define ERROR_SCALEFAK          20  // to get slower fallrate / has to be lower than threshold
+#define ERROR_TIME_MS           6000L
+#define ERROR_THRESHOLD         ceil(ERROR_TIME_MS/CONTROL_INTERVALL_MAX)
+#define ERROR_SCALEFAK          80L  // to get slower fallrate / has to be lower than threshold
 #define ERROR_FALLRATE          ceil(200.0 * ERROR_SCALEFAK * CONTROL_INTERVALL_MAX / 30000.0) // lower Throttle 200n in 30sec
 #define ERROR_THROTTLE_MIN      350     // drop till this point
 
@@ -187,11 +187,13 @@ void setup()
 
 void loop()
 {
+
+    uint16_t errorCounter = 0;
+    uint8_t  errorDetect = 0;
+
 loop_start:
 
-    uint8_t         dataValid = 0;
-    static uint8_t  errorDetect;
-    static uint16_t errorCounter = 0;
+    uint8_t  dataValid = 0;
 
     if (rf12_recvDone())
     {
@@ -212,8 +214,8 @@ loop_start:
     static uint32_t loop_time;
 
     loop_time     = millis();
-    if      (loop_time >= time2ctrl_max)     mustCTRL = 1;
-    else if (loop_time >= time2ctrl_min)     canCTRL  = 1;
+    if (loop_time >= time2ctrl_max)     mustCTRL = 1;
+    if (loop_time >= time2ctrl_min)     canCTRL  = 1;
 
     if (canCTRL && dataValid)
     {
