@@ -1,6 +1,6 @@
 #define USE_RADIO
 //#define USE_SERIAL    // for debug
-#define USE_SPEKTRUM
+#define USE_SPEKTRUM    // http://blog.kwarf.com/2013/08/a-look-at-the-spektrum-satellite-protocol/
 
 #define NODE_MASTER             9
 #define NODE_SLAVE              10
@@ -17,8 +17,8 @@
 #define CONTROL_INTERVALL_MIN   50      // for debug
 #define CONTROL_INTERVALL_MAX   500L
 #else
-#define CONTROL_INTERVALL_MIN   11      //
-#define CONTROL_INTERVALL_MAX   11L      // DSMX2 seems to be 11 or 22ms apart
+#define CONTROL_INTERVALL_MIN   22      //
+#define CONTROL_INTERVALL_MAX   22L     // DSMX2 seems to be 11 or 22ms apart (22ms is Std)
 #endif // USE_SERIAL
 
 #define ERROR_TIME_MS           6000L

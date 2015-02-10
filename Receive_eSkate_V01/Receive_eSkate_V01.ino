@@ -179,8 +179,8 @@ loop_start:
     static uint32_t loop_time;
 
     loop_time     = millis();
-    if      (loop_time >= time2ctrl_max)     mustCTRL = 1;
-    else if (loop_time >= time2ctrl_min)     canCTRL  = 1;
+    if (loop_time >= time2ctrl_max)     mustCTRL = 1;
+    if (loop_time >= time2ctrl_min)     canCTRL  = 1;
 
     if (canCTRL && dataValid)
     {
