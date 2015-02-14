@@ -1,5 +1,6 @@
 #define USE_RADIO
 //#define USE_SERIAL
+//#define USE_LATENCYTEST     // Test-Output which triggers a gpio for timing-analysis: high when can_send, low after ADC-sampling
 
 #define NODE_MASTER             9
 #define NODE_SLAVE              10
@@ -32,6 +33,7 @@
 #define PIN_RX_PWR              5
 #define PIN_TX_PWR              6
 #define PIN_LED                 8
+#define PIN_LATENCY             3 // INT 1
 
 /////////////////////  END OF CONFIG  //////////////////////////////////
 
@@ -139,14 +141,16 @@ void setup()
     pinMode(        PIN_LED,    OUTPUT);
     digitalWrite(   PIN_LED,    LOW);
 
+#ifdef USE_LATENCYTEST
+    pinMode(        PIN_LATENCY,OUTPUT);
+    digitalWrite(   PIN_LATENCY,LOW);
+#endif // USE_LATENCYTEST
+
 #ifdef USE_VCCSTARTCHECK
     // Safe-VCC-Check
     if (atmel.readVcc() < VCC_MIN)
     {
-        while (1)
-        {
-            Sleepy::loseSomeTime(1000);
-        }
+        while (1)   Sleepy::loseSomeTime(1000);
     }
 #endif // USE_VCCSTARTCHECK
 }
@@ -160,6 +164,7 @@ void loop()
 loop_start:
 
     // delay to while
+    delay(1);
 
     // READ DIGITAL
 #if DIGITAL_CHANNELS
@@ -181,6 +186,16 @@ loop_start:
     else                              msg_send.digital &= ~(1 < 7);
 #endif // DIGITAL_CHANNELS
 
+
+    loop_time     = millis();
+    if (loop_time >= time2send_max)     mustSend    = 1;
+    if (loop_time >= time2send_min)     couldSend   = 1;
+    else                                goto loop_start;
+
+#ifdef USE_LATENCYTEST
+    digitalWrite(   PIN_LATENCY, HIGH);
+#endif // USE_LATENCYTEST
+
     // READ ANALOG
     for (uint8_t ivar = 0; ivar < ANALOG_CHANNELS; ivar++)
     {
@@ -188,6 +203,10 @@ loop_start:
         if      (msg_send.analog[ivar] >= msg_old.analog[ivar] + ANALOG_JITTER)   newData = 1;
         else if (msg_send.analog[ivar] <= msg_old.analog[ivar] - ANALOG_JITTER)   newData = 1;
     }
+
+#ifdef USE_LATENCYTEST
+    digitalWrite(   PIN_LATENCY, LOW);
+#endif // USE_LATENCYTEST
 
     // Mod for RFM12BP
     if (msg_send.analog[4] > 512 + ANALOG_SAFEZONE)
@@ -203,12 +222,7 @@ loop_start:
         led_on = 0;
     }
 
-
-    loop_time     = millis();
-    if (loop_time >= time2send_max)     mustSend    = 1;
-    if (loop_time >= time2send_min)     couldSend   = 1;
-
-    if (couldSend)    // FLOW: couldSend stays 1 till newData gets in, immediatly send out!
+    if (couldSend)    // FLOW: couldSend stays 1 till newData gets in, immediately send out!
     {
         if (newData)
         {

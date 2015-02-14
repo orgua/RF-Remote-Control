@@ -1,6 +1,8 @@
 #define USE_RADIO
-//#define USE_SERIAL    // for debug
+//#define USE_SERIAL      // for debug
 #define USE_SPEKTRUM    // http://blog.kwarf.com/2013/08/a-look-at-the-spektrum-satellite-protocol/
+//#define USE_LATENCYTEST // Test-Output which triggers a gpio for timing-analysis: high when received, low after outputting
+                        // delay is about 8ms for 6 analog channels
 
 #define NODE_MASTER             9
 #define NODE_SLAVE              10
@@ -12,6 +14,7 @@
 #define STDVALUE                512     // middle of [0...1023]
 
 #define PIN_LED                 8
+#define PIN_LATENCY             3 // INT 1
 
 #ifdef USE_SERIAL
 #define CONTROL_INTERVALL_MIN   50      // for debug
@@ -174,6 +177,11 @@ void setup()
     pinMode(        PIN_LED, OUTPUT);
     digitalWrite(   PIN_LED, HIGH);
 
+#ifdef USE_LATENCYTEST
+    pinMode(        PIN_LATENCY,OUTPUT);
+    digitalWrite(   PIN_LATENCY,LOW);
+#endif // USE_LATENCYTEST
+
     eFkt.init(INTERVAL,1.6);
     eFkt.set_zeropoint(STDVALUE);
 
@@ -197,6 +205,10 @@ loop_start:
 
     if (rf12_recvDone())
     {
+#ifdef USE_LATENCYTEST
+        digitalWrite(   PIN_LATENCY, HIGH);
+#endif // USE_LATENCYTEST
+
         dataValid = rf12_handle();
 
         // Send out an ACK and put the actual PWM_Value inside
@@ -282,6 +294,10 @@ loop_start:
 #ifdef USE_SPEKTRUM
         spektrumSerial_send(spektrumCH);
 #endif // USE_SPEKTRUM
+
+#ifdef USE_LATENCYTEST
+        digitalWrite(   PIN_LATENCY, LOW);
+#endif // USE_LATENCYTEST
 
         time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
         time2ctrl_max = loop_time + CONTROL_INTERVALL_MAX;
