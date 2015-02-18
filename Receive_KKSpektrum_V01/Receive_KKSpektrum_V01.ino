@@ -1,6 +1,9 @@
-#define USE_RADIO
+#define USE_RADIO_RFM12
+//#define USE_RADIO_RFM95
+
 //#define USE_SERIAL      // for debug
 #define USE_SPEKTRUM    // http://blog.kwarf.com/2013/08/a-look-at-the-spektrum-satellite-protocol/
+
 //#define USE_LATENCYTEST // Test-Output which triggers a gpio for timing-analysis: high when received, low after outputting
                         // delay is about 8ms for 6 analog channels
 
@@ -17,8 +20,8 @@
 #define PIN_LATENCY             3 // INT 1
 
 #ifdef USE_SERIAL
-#define CONTROL_INTERVALL_MIN   50      // for debug
-#define CONTROL_INTERVALL_MAX   500L
+#define CONTROL_INTERVALL_MIN   20      // for debug
+#define CONTROL_INTERVALL_MAX   50L
 #else
 #define CONTROL_INTERVALL_MIN   22      //
 #define CONTROL_INTERVALL_MAX   22L     // DSMX2 seems to be 11 or 22ms apart (22ms is Std)
@@ -38,7 +41,7 @@ ISR(WDT_vect)
     Sleepy::watchdogEvent();
 }   // this must be defined since we're using the watchdog for low-power waiting
 
-#ifdef USE_RADIO
+#ifdef USE_RADIO_RFM12
 #include <RF12sio.h>
 RF12    RF12;
 #define SEND_MODE               2   // set to 3 if fuses are e=06/h=DE/l=CE, else set to 2
@@ -46,7 +49,16 @@ RF12    RF12;
 #define HDR_MASTER_ACK          ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_CTL|RF12_HDR_DST))
 #define HDR_SLAVE_MSG           ((NODE_SLAVE&RF12_HDR_MASK)|(0))
 #define HDR_SLAVE_ACK           ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_CTL))
-#endif // USE_RADIO
+#endif // USE_RADIO_RFM12
+
+#ifdef USE_RADIO_RFM95
+#include <SPI.h>
+#include <RH_RF95.h>
+RH_RF95 rf95; // Singleton instance of the radio driver
+#undef YIELD
+#define YIELD Sleepy::loseSomeTime(20);
+#endif // USE_RADIO_RFM95
+
 
 #include <atmel_vcc.h>
 ATMEL atmel = ATMEL();
@@ -73,7 +85,7 @@ struct masterCTRL
     //uint32_t    time;
 };
 masterCTRL* msg_received; /// HIER IST EINE ÄNDERUNG in Bezug zur Sendeversion
-masterCTRL  msg_valid;
+masterCTRL  msg_valid, msg_rfm95;
 uint8_t     msg_size = sizeof(msg_valid);
 
 int16_t     servo[ANALOG_CHANNELS], backup_throttle;
@@ -81,12 +93,21 @@ uint16_t    receive_errors; // use for QoS
 
 /////////////////////  PROGRAM:  //////////////////////////////////
 
-uint8_t rf12_handle()
+uint8_t rfm_handle()
 {
 
+#ifdef USE_RADIO_RFM12
     if (rf12_crc != 0)                          return 0;
     if ((rf12_hdr&RF12_HDR_MASK)!=NODE_SLAVE)   return 0;
     if (rf12_len != msg_size)                   return 0;
+#endif // USE_RADIO_RFM12
+
+#ifdef USE_RADIO_RFM95
+    uint8_t rf95_len = RH_RF95_MAX_MESSAGE_LEN;
+    if (!rf95.recv((uint8_t*)&msg_rfm95,&rf95_len))     return 0;
+    if (rf95_len != msg_size)                           return 0;
+    // TODO check CRC
+#endif // USE_RADIO_RFM95
 
     int16_t puffer[ANALOG_CHANNELS];
 
@@ -150,15 +171,23 @@ void setup()
     Serial.begin(115200);
 #endif // USE_SERIAL
 
+    Sleepy::loseSomeTime(40); // wait for rfm-startup
 
-
-#ifdef USE_RADIO
-    delay(40);
+#ifdef USE_RADIO_RFM12
     rf12_initialize(NODE_SLAVE, RF12_868MHZ, 212); // NodeID, Freq, netGroup
     rf12_initialize(NODE_SLAVE, RF12_868MHZ, 212); // NodeID, Freq, netGroup
     rf12_control(0xC040); // set low-battery level to 2.2V i.s.o. 3.1V
     msg_received = (masterCTRL*) rf12_data;
-#endif // USE_RADIO
+#endif // USE_RADIO_RFM12
+
+#ifdef USE_RADIO_RFM95
+    rf95.init();
+    rf95.setFrequency(868.0);            // in MHz
+    //rf95.setModemConfig(Bw125Cr45Sf128); // Medium Range (lookup _RF95.h)
+    rf95.setTxPower(13);                 // 5 ... 23 dBm
+    msg_received = (masterCTRL*) &msg_rfm95;
+//rf95.sleep();
+#endif // USE_RADIO_RFM95
 
     spektrumCH[0]       = STDVALUE;
     spektrumCH[1]       = STDVALUE;
@@ -203,14 +232,13 @@ loop_start:
 
     uint8_t  dataValid = 0;
 
+#ifdef USE_RADIO_RFM12
     if (rf12_recvDone())
     {
 #ifdef USE_LATENCYTEST
         digitalWrite(   PIN_LATENCY, HIGH);
 #endif // USE_LATENCYTEST
-
-        dataValid = rf12_handle();
-
+        dataValid = rfm_handle();
         // Send out an ACK and put the actual PWM_Value inside
         if (RF12_WANTS_ACK)
         {
@@ -221,6 +249,18 @@ loop_start:
             rf12_sendWait(SEND_MODE);
         }
     }
+#endif // USE_RADIO_RFM12
+
+#ifdef USE_RADIO_RFM95
+    if (rf95.available())
+    {
+#ifdef USE_LATENCYTEST
+        digitalWrite(   PIN_LATENCY, HIGH);
+#endif // USE_LATENCYTEST
+        dataValid = rfm_handle();
+    }
+#endif // USE_RADIO_RFM95
+
 
     static uint8_t  mustCTRL = 0, canCTRL = 0;
     static uint32_t loop_time;
@@ -304,13 +344,12 @@ loop_start:
         mustCTRL = 0;
 
 #ifdef USE_SERIAL
-        Serial.print(msg_size);
-        Serial.print(" :: ");
         for (uint8_t ivar = 0; ivar < 5; ivar++)
         {
             Serial.print(spektrumCH[ivar]);
-            Serial.print(" : ");
+            Serial.print(", ");
         }
+        /*
         Serial.print(msg_valid.digital, BIN);
         Serial.print(" : ");
         Serial.print(msg_valid.com);
@@ -319,8 +358,10 @@ loop_start:
         Serial.print(" : ");
         Serial.print(msg_valid.counter);
         Serial.print(" : E");
+        */
         Serial.print(receive_errors);
         Serial.println("");
+        Serial.flush();
 
 #endif // USE_SERIAL
 

@@ -1,5 +1,18 @@
-#define USE_RADIO
+/*
+TODO:
+- to time-scheduling right ... CanDo Timings! must_send, should_send, could_send
+- get vars in functions
+- const instead of defines
+- transfer code-blocks to libs
+- include all in one?
+
+*/
+
+#define USE_RADIO_RFM12
+//#define USE_RADIO_RFM95     // TODO: switch to RHReliableDatagram
+
 //#define USE_SERIAL
+
 //#define USE_LATENCYTEST     // Test-Output which triggers a gpio for timing-analysis: high when can_send, low after ADC-sampling
 
 #define NODE_MASTER             9
@@ -43,7 +56,7 @@ ISR(WDT_vect)
     Sleepy::watchdogEvent();
 }   // this must be defined since we're using the watchdog for low-power waiting
 
-#ifdef USE_RADIO
+#ifdef USE_RADIO_RFM12
 #include <RF12sio.h>
 RF12    RF12;
 #define SEND_MODE               2   // set to 3 if fuses are e=06/h=DE/l=CE, else set to 2
@@ -51,7 +64,15 @@ RF12    RF12;
 #define HDR_MASTER_ACK          ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_CTL|RF12_HDR_DST))
 #define HDR_SLAVE_MSG           ((NODE_SLAVE&RF12_HDR_MASK)|(0))
 #define HDR_SLAVE_ACK           ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_CTL))
-#endif  // USE_RADIO
+#endif  // USE_RADIO_RFM12
+
+#ifdef USE_RADIO_RFM95
+#include <SPI.h>
+#include <RH_RF95.h>
+RH_RF95 rf95; // Singleton instance of the radio driver
+#undef YIELD
+#define YIELD Sleepy::loseSomeTime(20);
+#endif // USE_RADIO_RFM95
 
 #include <atmel_vcc.h>
 ATMEL atmel = ATMEL();
@@ -92,14 +113,23 @@ void setup()
     Serial.begin(115200);
 #endif
 
-#ifdef USE_RADIO
-    Sleepy::loseSomeTime(40);
+    Sleepy::loseSomeTime(40); // wait for rfm-startup
+
+#ifdef USE_RADIO_RFM12
     //rf12_config();
     rf12_initialize(NODE_MASTER, RF12_868MHZ, 212); // NodeID, Freq, netGroup
     rf12_initialize(NODE_MASTER, RF12_868MHZ, 212);
     rf12_control(0xC040); // set low-battery level to 2.2V i.s.o. 3.1V
     rf12_sleep(RF12_SLEEP);
 #endif
+
+#ifdef USE_RADIO_RFM95
+    rf95.init();
+    rf95.setFrequency(868.0);            // in MHz
+    //rf95.setModemConfig(Bw125Cr45Sf128); // Medium Range (lookup _RF95.h)
+    rf95.setTxPower(13);                 // 5 ... 23 dBm
+    rf95.sleep();
+#endif // USE_RADIO_RFM95
 
     // init vars
     msg_send.counter = 0;
@@ -241,7 +271,7 @@ loop_start:
     if (mustSend)
     {
 
-#ifdef USE_RADIO
+#ifdef USE_RADIO_RFM12
         static boolean received;
         rf12_sleep(RF12_WAKEUP);
         while (!rf12_canSend())
@@ -252,6 +282,12 @@ loop_start:
         rf12_sendWait(SEND_MODE);
         rf12_sleep(RF12_SLEEP);
 #endif
+
+#ifdef USE_RADIO_RFM95
+        rf95.send((uint8_t*)&msg_send, msg_size);
+        rf95.waitPacketSent();
+        rf95.sleep();
+#endif // USE_RADIO_RFM95
 
         if (msg_send.counter & led_on)  digitalWrite(PIN_LED, HIGH);
         else                            digitalWrite(PIN_LED, LOW);
