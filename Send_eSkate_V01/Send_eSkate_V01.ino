@@ -7,6 +7,7 @@
    Y --> POTI   (PotiPort 5 PC3, PD3, PD1, PB1)
    Coincell (+) to Potiport 1
    Short the Resistor
+   
 - Energyconsumption:
 
     wake:           10ms*500uA + 1ms*800uA + 50us*1900uA ) * 3V --> 17.7 uWs
@@ -17,6 +18,10 @@
     sleep      : 1*w         -->   18 uWs
 
     CR2025 : 150 mAh * 3V --> 1620 Ws
+    
+    2015-03: new Fusesettings - EXT 0xFD, HIGH 0xDF, LOW 0xD2
+    - use internal RC-Oszi / 8MHz
+    - BOD 2V7
 */
 
 #define USE_RADIO
