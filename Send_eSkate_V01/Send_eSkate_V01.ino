@@ -19,7 +19,7 @@
 
     CR2025 : 150 mAh * 3V --> 1620 Ws
     
-    2015-03: new Fusesettings - EXT 0xFD, HIGH 0xDF, LOW 0xD2
+    2015-03: new Fusesettings - EXT 0xFE, HIGH 0xDF, LOW 0xC2
     - use internal RC-Oszi / 8MHz
     - BOD 2V7
 */
@@ -38,10 +38,10 @@
 #define VCC_MIN                 2500 // mV
 
 #define USE_POWEROFF
-#define POWEROFF_INTERVALL      (20*1000L) // ms
+#define POWEROFF_INTERVALL      (20000L) // ms
 
 #define ANALOG_CHANNELS         1 // number of channels to transmit
-#define ANALOG_JITTER           3
+#define ANALOG_JITTER           10
 #define ANALOG_SAFEZONE         100
 #define ANALOG_DEADZONE         30      // for ignoring small drifts (around zero)
 
@@ -89,6 +89,10 @@ ISR(ADC_vect)
     adcDone = true;
 }
 
+#include <PowerSaver.h>
+PowerSaver ps;
+
+
 struct masterCTRL
 {
     uint8_t     com;
@@ -117,7 +121,7 @@ uint8_t loseDirectTime (uint16_t msecs)
     uint16_t msleft = msecs;
     // only slow down for periods longer than the watchdog granularity
     if (msleft <= 16) return 0;
-
+	watchdogCounter = 0;
     uint8_t wdp = 0; // wdp 0..9 corresponds to roughly 16..8192 ms
     // calc wdp as log2(msleft/16), i.e. loop & inc while next value is ok
     for (uint16_t m = msleft; m >= 32; m >>= 1)  if (++wdp >= 9) break;
@@ -145,7 +149,15 @@ uint8_t loseDirectTime (uint16_t msecs)
 
 void setup()
 {
-
+	/*
+    //ps.turnOffSPI();
+    ps.turnOffGPIO();
+    ps.turnOffTWI();
+    ps.turnOffTimer1();
+    ps.turnOffTimer2();
+    //ps.turnOffDigitalInput();
+    ps.turnOffUART();
+  */
 #ifdef USE_RADIO
     Sleepy::loseSomeTime(40);
     rf12_initialize(NODE_MASTER, RF12_868MHZ, 212); // NodeID, Freq, netGroup
@@ -229,16 +241,16 @@ loop_start:
     ADCSRA |= bit(ADEN); // enable ADC (last Step)
     digitalWrite(PIN_VCC, HIGH);
     msg_send.digital    = digitalRead(PIN_SWITCH);
-    if      (msg_send.digital != msg_old.digital)                       newData = 1;
-
     msg_send.analog[0]  = analogRead(PIN_POTI_ANALOG) + ANALOG_SAFEZONE; // ADD safezone to avoid checking...
-    if      (msg_send.analog[0] >= msg_old.analog[0] + ANALOG_JITTER)   newData = 1;
-    else if (msg_send.analog[0] <= msg_old.analog[0] - ANALOG_JITTER)   newData = 1;
-    else if (msg_send.analog[0] > ANALOG_SAFEZONE + 50)                 time2powerOff   = loop_time + POWEROFF_INTERVALL;
-    digitalWrite(PIN_VCC, LOW);
+	digitalWrite(PIN_VCC, LOW);
     ADCSRA &= ~ bit(ADEN); // disable ADC (first Step)
     PRR |= (1<<0); // disable ADC
-
+	
+	if      (msg_send.digital != msg_old.digital)                       newData = 1;
+    if      (msg_send.analog[0] >= msg_old.analog[0] + ANALOG_JITTER)   newData = 1;
+    else if (msg_send.analog[0] <= msg_old.analog[0] - ANALOG_JITTER)   newData = 1;
+    else if (msg_send.analog[0] > ANALOG_SAFEZONE + 50)            		time2powerOff   = loop_time + POWEROFF_INTERVALL;
+ 
     if (couldSend)    // FLOW: couldSend stays 1 till newData gets in, immediatly send out!
     {
         if (newData)
@@ -260,7 +272,6 @@ loop_start:
             couldSend       = 0;
             shouldSend--;
         }
-
     }
 
     if (mustSend)
@@ -299,7 +310,6 @@ loop_start:
 
             mustSend            = 0;
             couldSend           = 0;
-
         }
         else   rf12_sleep(RF12_SLEEP);
     }
@@ -312,7 +322,7 @@ loop_start:
         while(!digitalRead(PIN_POTI))
         {
             digitalWrite(PIN_VCC, LOW);
-            Sleepy::watchdogInterrupts(6); // 0..9 corresponds to roughly 16..8192 ms
+            Sleepy::watchdogInterrupts(7); // 0..9 corresponds to roughly 16..8192 ms
             Sleepy::powerDown();
             Sleepy::watchdogInterrupts(-1);
             digitalWrite(PIN_VCC, HIGH);
