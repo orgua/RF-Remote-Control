@@ -1,5 +1,5 @@
 #define USE_RADIO
-//#define USE_SERIAL    // for debug
+#define USE_SERIAL    // for debug
 #define USE_PWM
 //#define USE_BRAKES
 
@@ -233,6 +233,19 @@ loop_start:
         }
 
         servoA.writeMicroseconds(servo); // TODO: has to be between 1100 and 1900, now: 1250
+        
+#ifdef USE_SERIAL
+    Serial.print(msg_valid.com);
+    Serial.print(" : ");
+    Serial.print(msg_valid.digital);
+    Serial.print("D : ");
+    Serial.print(msg_valid.vcc);
+    Serial.print("V : ");
+    Serial.print(msg_valid.analog[0]);
+    Serial.print("A : ");    
+    Serial.print(msg_valid.counter);
+    Serial.println("C");
+#endif // USE_SERIAL
 
         time2ctrl_min   = loop_time + CONTROL_INTERVALL_MIN;
         time2ctrl_max   = loop_time + CONTROL_INTERVALL_MAX;

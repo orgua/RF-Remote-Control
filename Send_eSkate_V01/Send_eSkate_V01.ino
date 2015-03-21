@@ -20,8 +20,9 @@
     CR2025 : 150 mAh * 3V --> 1620 Ws
     
     2015-03: new Fusesettings - EXT 0xFE, HIGH 0xDF, LOW 0xC2
-    - use internal RC-Oszi / 8MHz
-    - BOD 2V7
+    --> switch to ardu mini pro 8Mhz
+    - use internal RC-Oszi / 8MHz with minimal wake-delays
+    - BOD 1V8
 */
 
 #define USE_RADIO
