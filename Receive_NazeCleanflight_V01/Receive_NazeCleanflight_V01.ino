@@ -15,14 +15,15 @@
 #define PIN_LED                 8
 #define PIN_LATENCY             3 // INT 1
 
-#define CONTROL_INTERVALL       8L     // DSMX2 seems to be 11 or 22ms apart (22ms is Std)
+#define CONTROL_INTERVALL_MIN   (8L)
+#define CONTROL_INTERVALL_MAX   (16L)
 // cleanflight is ok with 5ms distance! https://github.com/cleanflight/cleanflight/blob/master/src/main/rx/spektrum.c
 // 16byte Frame takes about 1.5ms 
 
 #define ERROR_TIME_MS           5000L
-#define ERROR_THRESHOLD         ceil(ERROR_TIME_MS/CONTROL_INTERVALL)
+#define ERROR_THRESHOLD         ceil(ERROR_TIME_MS/CONTROL_INTERVALL_MAX)
 #define ERROR_SCALEFAK          80L  // to get slower fallrate / has to be lower than threshold
-#define ERROR_FALLRATE          ceil(200.0 * ERROR_SCALEFAK * CONTROL_INTERVALL / 30000.0) // lower Throttle 200n in 30sec
+#define ERROR_FALLRATE          ceil(200.0 * ERROR_SCALEFAK * CONTROL_INTERVALL_MAX / 30000.0) // lower Throttle 200n in 30sec
 #define ERROR_THROTTLE_MIN      350     // drop till this point
 
 /////////////////////  END OF CONFIG  //////////////////////////////////
@@ -63,9 +64,6 @@ ISR(ADC_vect)
 #ifdef USE_SPEKTRUM
 #include <atmel_spektrumSerial.h>
 #endif // USE_SPEKTRUM
-
-#include <atmel_eFunction.h>
-eFunction eFkt;
 
 #include <PowerSaver.h>
 PowerSaver ps;
@@ -134,8 +132,6 @@ uint8_t rfm_handle()
 }
 
 
-uint16_t    spektrumCH[7];
-uint32_t    time2ctrl;
 
 void setup()
 {
@@ -171,15 +167,6 @@ void setup()
     msg_received = (masterCTRL*) &msg_rfm95;
 //rf95.sleep();
 #endif // USE_RADIO_RFM95
-
-    spektrumCH[0]       = STDVALUE;
-    spektrumCH[1]       = STDVALUE;
-    spektrumCH[2]       = STDVALUE;
-    spektrumCH[3]       = STDVALUE;
-    spektrumCH[4]       = STDVALUE;
-    spektrumCH[5]       = STDVALUE;
-    spektrumCH[6]       = STDVALUE;
-    spektrumCH[7]       = STDVALUE;
     
     for (uint8_t ivar = 0; ivar < ANALOG_CHANNELS; ivar++)
     {
@@ -189,11 +176,6 @@ void setup()
 
     pinMode(        PIN_LED, OUTPUT);
     digitalWrite(   PIN_LED, HIGH);
-
-    eFkt.init(INTERVAL,1.6);
-    eFkt.set_zeropoint(STDVALUE);
-
-    time2ctrl = millis() + CONTROL_INTERVALL;
 }
 
 
@@ -204,36 +186,44 @@ void loop()
     uint16_t errorCounter = 0;
     uint8_t  errorDetect = 0;
     uint8_t  mustCTRL = 0;
-    uint32_t loop_time;
+    uint8_t  couldCTRL = 0;
     uint8_t  dataValid = 0;
+
+    uint32_t loop_time = millis();
+    uint32_t time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
+    uint32_t time2ctrl_max = loop_time + CONTROL_INTERVALL_MAX;
+    
+    uint16_t spektrumCH[7];
+    spektrumCH[0]       = STDVALUE;
+    spektrumCH[1]       = STDVALUE;
+    spektrumCH[2]       = STDVALUE;
+    spektrumCH[3]       = STDVALUE;
+    spektrumCH[4]       = STDVALUE;
+    spektrumCH[5]       = STDVALUE;
+    spektrumCH[6]       = STDVALUE;
+    //spektrumCH[7]       = STDVALUE;
     
 loop_start:
 
-    
-
 #ifdef USE_RADIO_RFM12
-    if (rf12_recvDone())
-    {
-        dataValid = rfm_handle();
-        // Send out an ACK and put the actual PWM_Value inside
-    }
+    if (rf12_recvDone())      dataValid = rfm_handle();
 #endif // USE_RADIO_RFM12
 
 #ifdef USE_RADIO_RFM95
-    if (rf95.available())
-    {
-        dataValid = rfm_handle();
-    }
+    if (rf95.available())     dataValid = rfm_handle();
 #endif // USE_RADIO_RFM95
 
     loop_time     = millis();
-    if (loop_time >= time2ctrl)     mustCTRL = 1;
-
-    if (mustCTRL && dataValid)
+    if (loop_time > time2ctrl_max)     mustCTRL  = 1;
+    
+    if (dataValid)
     {
-        dataValid       = 0;
-        errorCounter    = 0;
-        errorDetect     = 0;
+        if (loop_time > time2ctrl_min) {
+          mustCTRL        = 1;
+          dataValid       = 0;
+          errorCounter    = 0;
+          errorDetect     = 0;
+        }
     }
 
     if (mustCTRL)
@@ -281,27 +271,26 @@ loop_start:
         //  CH1 R V ObenMinus
         //  CH2 L V ObenPlus
         //  CH3 L H RechtsMinus
-        servo[0]   = (servo[0]-512)*1.4+512;
-        servo[1]   = (servo[1]-512)*1.4+512;
+        servo[0]   = (servo[0]-512)*1.40+512;
+        servo[1]   = (servo[1]-512)*1.40+512;
         servo[2]   = (servo[2]-512)*1.40+512; //trottle
-        servo[3]   = (servo[3]-512)*1.4+512;
+        servo[3]   = (servo[3]-512)*1.40+512;
         
-        if (servo[5] > 512)      servo[5] -= 20;
-        else if (servo[5] < 512) servo[5] += 20;
-        
-        
-        spektrumCH[0] = eFkt.get(servo[0]);
-        spektrumCH[1] = eFkt.get(1024 - servo[1]);
-        spektrumCH[2] = (servo[2]);
-        spektrumCH[3] = eFkt.get(1024 - servo[3]);
-        spektrumCH[4] = (servo[5]);
-        //spektrumCH[5] = STDVALUE; // TBD
-        //spektrumCH[6] = STDVALUE; // TBD
+        if      (servo[5] > 512)   servo[5] -= 20;
+        else if (servo[5] < 512)   servo[5] += 20;
+                
+        spektrumCH[0] = servo[0];
+        spektrumCH[1] = 1024 - servo[1];
+        spektrumCH[2] = servo[2];
+        spektrumCH[3] = 1024 - servo[3];
+        spektrumCH[4] = servo[5];
+
 #ifdef USE_SPEKTRUM
         spektrumSerial_send(spektrumCH);
 #endif // USE_SPEKTRUM
 
-        time2ctrl = loop_time + CONTROL_INTERVALL;
+        time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
+        time2ctrl_max = loop_time + CONTROL_INTERVALL_MAX;
         mustCTRL = 0;
     }
 
