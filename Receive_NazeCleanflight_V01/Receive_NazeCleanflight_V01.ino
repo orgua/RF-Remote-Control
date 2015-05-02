@@ -18,7 +18,7 @@
 #define CONTROL_INTERVALL_MIN   (8L)
 #define CONTROL_INTERVALL_MAX   (16L)
 // cleanflight is ok with 5ms distance! https://github.com/cleanflight/cleanflight/blob/master/src/main/rx/spektrum.c
-// 16byte Frame takes about 1.5ms 
+// 16byte Frame takes about 1.5ms
 
 #define ERROR_TIME_MS           5000L
 #define ERROR_THRESHOLD         ceil(ERROR_TIME_MS/CONTROL_INTERVALL_MAX)
@@ -28,13 +28,9 @@
 
 /////////////////////  END OF CONFIG  //////////////////////////////////
 
-#include <JeeLib.h>
-ISR(WDT_vect)
-{
-    Sleepy::watchdogEvent();
-}   // this must be defined since we're using the watchdog for low-power waiting
-
 #ifdef USE_RADIO_RFM12
+#include <JeeLib.h>
+#define WDT_VECT_DEFINED
 #include <RF12sio.h>
 RF12    RF12;
 #define SEND_MODE               2   // set to 3 if fuses are e=06/h=DE/l=CE, else set to 2
@@ -44,14 +40,30 @@ RF12    RF12;
 #define HDR_SLAVE_ACK           ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_CTL))
 #endif // USE_RADIO_RFM12
 
+
+/// PowerSaver-Lib
+#include <PowerSaver.h>
+PowerSaver ps;
+
+#ifndef WDT_VECT_DEFINED
+#define WDT_VECT_DEFINED
+ISR(WDT_vect)
+{
+    ++vector_wdt_called;
+};
+#endif // WDT_VECT_DEFINED
+
+
+
+
+
 #ifdef USE_RADIO_RFM95
 #include <SPI.h>
 #include <RH_RF95.h>
 RH_RF95 rf95; // Singleton instance of the radio driver
 #undef YIELD
-#define YIELD Sleepy::loseSomeTime(20);
+#define YIELD   (ps.sleep(0))
 #endif // USE_RADIO_RFM95
-
 
 #include <atmel_vcc.h>
 ATMEL atmel = ATMEL();
@@ -65,8 +77,6 @@ ISR(ADC_vect)
 #include <atmel_spektrumSerial.h>
 #endif // USE_SPEKTRUM
 
-#include <PowerSaver.h>
-PowerSaver ps;
 
 struct masterCTRL
 {
@@ -139,18 +149,9 @@ void setup()
     ps.turnOffTWI();
     ps.turnOffTimer1();
     ps.turnOffTimer2();
-    ps.turnOffDigitalInput();  
-    
-#ifdef USE_SPEKTRUM
-    spektrumSerial_init();
-    //#define UART_BAUD_RATE 104200   // hacker bei ROLL
-    #define UART_BAUD_RATE 107500   // hacker bei ROLL
-    #define UART_BAUD_SELECT ((F_CPU/UART_BAUD_RATE/16)-1)
-    UBRR0L=((unsigned char)UART_BAUD_SELECT);
-    UDR0 = 0xAA;  
-#endif // USE_SPEKTRUM
+    ps.turnOffDigitalInput();
 
-    Sleepy::loseSomeTime(40); // wait for rfm-startup
+    ps.sleep(1); // wait for rfm-startup
 
 #ifdef USE_RADIO_RFM12
     rf12_initialize(NODE_SLAVE, RF12_868MHZ, 212); // NodeID, Freq, netGroup
@@ -167,7 +168,7 @@ void setup()
     msg_received = (masterCTRL*) &msg_rfm95;
 //rf95.sleep();
 #endif // USE_RADIO_RFM95
-    
+
     for (uint8_t ivar = 0; ivar < ANALOG_CHANNELS; ivar++)
     {
         msg_valid.analog[ivar] = STDVALUE;
@@ -183,6 +184,15 @@ void setup()
 void loop()
 {
 
+#ifdef USE_SPEKTRUM
+    spektrum_init();
+    //#define UART_BAUD_RATE 104200   // hacker bei ROLL
+    #define UART_BAUD_RATE 107500   // hacker bei ROLL
+    #define UART_BAUD_SELECT ((F_CPU/UART_BAUD_RATE/16)-1)
+    UBRR0L=((unsigned char)UART_BAUD_SELECT);
+    UDR0 = 0xAA;
+#endif // USE_SPEKTRUM
+
     uint16_t errorCounter = 0;
     uint8_t  errorDetect = 0;
     uint8_t  mustCTRL = 0;
@@ -192,17 +202,9 @@ void loop()
     uint32_t loop_time = millis();
     uint32_t time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
     uint32_t time2ctrl_max = loop_time + CONTROL_INTERVALL_MAX;
-    
-    uint16_t spektrumCH[7];
-    spektrumCH[0]       = STDVALUE;
-    spektrumCH[1]       = STDVALUE;
-    spektrumCH[2]       = STDVALUE;
-    spektrumCH[3]       = STDVALUE;
-    spektrumCH[4]       = STDVALUE;
-    spektrumCH[5]       = STDVALUE;
-    spektrumCH[6]       = STDVALUE;
-    //spektrumCH[7]       = STDVALUE;
-    
+
+    uint16_t spektrumCH[12] = {STDVALUE,STDVALUE,STDVALUE,  STDVALUE,STDVALUE,STDVALUE,  STDVALUE,STDVALUE,STDVALUE,  STDVALUE,STDVALUE,STDVALUE};
+
 loop_start:
 
 #ifdef USE_RADIO_RFM12
@@ -215,7 +217,7 @@ loop_start:
 
     loop_time     = millis();
     if (loop_time > time2ctrl_max)     mustCTRL  = 1;
-    
+
     if (dataValid)
     {
         if (loop_time > time2ctrl_min) {
@@ -275,10 +277,10 @@ loop_start:
         servo[1]   = (servo[1]-512)*1.40+512;
         servo[2]   = (servo[2]-512)*1.40+512; //trottle
         servo[3]   = (servo[3]-512)*1.40+512;
-        
+
         if      (servo[5] > 512)   servo[5] -= 20;
         else if (servo[5] < 512)   servo[5] += 20;
-                
+
         spektrumCH[0] = servo[0];
         spektrumCH[1] = 1024 - servo[1];
         spektrumCH[2] = servo[2];
@@ -286,7 +288,7 @@ loop_start:
         spektrumCH[4] = servo[5];
 
 #ifdef USE_SPEKTRUM
-        spektrumSerial_send(spektrumCH);
+        spektrum_send(spektrumCH);
 #endif // USE_SPEKTRUM
 
         time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
