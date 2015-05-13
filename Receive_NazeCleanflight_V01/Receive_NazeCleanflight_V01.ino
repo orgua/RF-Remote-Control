@@ -30,7 +30,6 @@
 
 #ifdef USE_RADIO_RFM12
 #include <JeeLib.h>
-#define WDT_VECT_DEFINED
 #include <RF12sio.h>
 RF12    RF12;
 #define SEND_MODE               2   // set to 3 if fuses are e=06/h=DE/l=CE, else set to 2
@@ -45,16 +44,10 @@ RF12    RF12;
 #include <PowerSaver.h>
 PowerSaver ps;
 
-#ifndef WDT_VECT_DEFINED
-#define WDT_VECT_DEFINED
 ISR(WDT_vect)
 {
     ++vector_wdt_called;
 };
-#endif // WDT_VECT_DEFINED
-
-
-
 
 
 #ifdef USE_RADIO_RFM95
@@ -207,6 +200,8 @@ void loop()
 
 loop_start:
 
+    wdt_reset();
+    
 #ifdef USE_RADIO_RFM12
     if (rf12_recvDone())      dataValid = rfm_handle();
 #endif // USE_RADIO_RFM12
