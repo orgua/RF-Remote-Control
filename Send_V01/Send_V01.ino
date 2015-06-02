@@ -1,9 +1,7 @@
 /*
-
 TODO:
 - transfer code-blocks to libs
 - include all in one?
-
 */
 
 //#define         USE_RADIO_RFM12
@@ -41,10 +39,10 @@ const uint8_t   PIN_DIGITAL_F           = ( 6 );
 const uint8_t   PIN_DIGITAL_G           = ( 7 );
 const uint8_t   PIN_DIGITAL_H           = ( 9 );
 
-#define         USE_LATENCYTEST     // Test-Output which triggers a gpio for timing-analysis: high when can_send, low after ADC-sampling
+//#define         USE_LATENCYTEST     // Test-Output which triggers a gpio for timing-analysis: high when can_send, low after ADC-sampling
 // rfm95 takes about 60ms from reading ADC, over sending, to writing to naze32
-const uint8_t   PIN_LED                 = ( 9 ); // standard: 8
 const uint8_t   PIN_LATENCY             = ( 8 ); // INT 1
+const uint8_t   PIN_LED                 = ( 8 ); // standard: 8
 
 // Config for Module_Modellbau
 #ifdef USE_RADIO_RFM12
@@ -52,38 +50,46 @@ const uint8_t   PIN_RX_PWR              = ( 5 );
 const uint8_t   PIN_TX_PWR              = ( 6 );
 #endif // USE_RADIO_RFM12
 
-/////////////////////  END OF CONFIG  //////////////////////////////////
+///  END OF CONFIG  ///////////////////////////////////////////////////////////////////
 
+/// Watchdog-Timer
 #include <avr/wdt.h>
 
-/// PowerSaver-Lib
-#include <PowerSaver.h>
-PowerSaver ps;
+/// Fix for Serial-Lib (smaller Buffers)
+#define         SERIAL_TX_BUFFER_SIZE   (16)
+#define         SERIAL_RX_BUFFER_SIZE   (4)
+#define         SERIAL_BUFFER_SIZE      (16)
 
-ISR ( WDT_vect )
-{
-        ++vector_wdt_called;
-};
-
+/// Basics for RFM12-Module
 #ifdef USE_RADIO_RFM12
-#include <JeeLib.h> // JeeLib RF
+#include <JeeLib.h>
 #include <RF12sio.h>
-RF12    RF12;
+RF12 RF12;
 const uint8_t   SEND_MODE               = ( 2 ); // set to 3 if fuses are e=06/h=DE/l=CE, else set to 2
-const uint8_t   HDR_MASTER_MSG          = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_DST | 0 ) ) );
+const uint8_t   HDR_MASTER_MSG          = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_DST | 0 ) ) ); // |RF12_HDR_ACK if you want an ACK
 const uint8_t   HDR_MASTER_ACK          = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_CTL | RF12_HDR_DST ) ) );
 const uint8_t   HDR_SLAVE_MSG           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( 0 ) ) );
 const uint8_t   HDR_SLAVE_ACK           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_CTL ) ) );
-#endif  // USE_RADIO_RFM12
+#endif // USE_RADIO_RFM12
 
+/// RFM95-Module
 #ifdef USE_RADIO_RFM95
 #include <SPI.h>
 #include <RH_RF95.h>
 RH_RF95 rf95; // Singleton instance of the radio driver
 #undef YIELD
-#define YIELD   (ps.sleep ( 0 ) )
+#define YIELD   (ps.sleep(0));
 #endif // USE_RADIO_RFM95
 
+/// PowerSaver-Lib
+#include <PowerSaver.h>
+PowerSaver ps;
+ISR ( WDT_vect )
+{
+        ++vector_wdt_called;
+};
+
+/// Lib for VCC-Readings
 #ifdef USE_VCCSTARTCHECK
 #include <atmel_vcc.h>
 ATMEL atmel = ATMEL ();
@@ -94,6 +100,7 @@ ISR ( ADC_vect )
 };
 #endif // USE_VCCSTARTCHECK
 
+/// Global Variables and Structures
 struct masterCTRL
 {
         uint8_t  com;
@@ -114,8 +121,7 @@ struct masterTEMP
 };
 
 
-
-/////////////////////  PROGRAM:  //////////////////////////////////
+///  PROGRAM:  ////////////////////////////////////////////////////
 
 void setup ()
 {
@@ -176,11 +182,11 @@ void setup ()
 #define REG_MODEM_CONFIG3           0x26
 #define     MSK_LOW_DATARATE_OPTI   (B00001000) // Mandatory when symbollength > 16ms
 #define     MSK_AGC_AUTO_ON         (B00000100)
-        RH_RF95::ModemConfig conf = {0,0,0};
-        conf.reg_1d = (VAL_MODEM_BW125 | VAL_MODEM_CR1);
-        conf.reg_1e = (VAL_MODEM_SF07  | MSK_RX_PAYLOAD_CRC_ON );
-        conf.reg_26 = (MSK_AGC_AUTO_ON ); // TODO: Test
-        rf95.setModemRegisters(&conf);
+        RH_RF95::ModemConfig conf = {0, 0, 0};
+        conf.reg_1d = ( VAL_MODEM_BW125 | VAL_MODEM_CR1 );
+        conf.reg_1e = ( VAL_MODEM_SF07  | MSK_RX_PAYLOAD_CRC_ON );
+        conf.reg_26 = ( MSK_AGC_AUTO_ON ); // TODO: Test
+        rf95.setModemRegisters ( &conf );
 
         rf95.setTxPower ( 20 );               // 5 ... 23 dBm
         rf95.setPreambleLength ( 8 );
@@ -231,13 +237,13 @@ void setup ()
 void loop ()
 {
 
-        // timing
+        /// timing
         uint32_t loop_time      = millis ();
         uint32_t time2send_min  = loop_time + MESSAGE_INTERVALL_MIN;
         uint32_t time2send_max  = loop_time + MESSAGE_INTERVALL_MAX;
         uint32_t time2powerOff  = loop_time + POWEROFF_INTERVALL;
 
-        // init vars
+        /// init vars
         struct masterCTRL msg_send;
         struct masterTEMP msg_old;
 
@@ -250,14 +256,13 @@ void loop ()
                 msg_old.analog[ivar]  = msg_send.analog[ivar];
         }
 
-        // state-machine-Vars
+        /// state-machine-Vars
         static uint8_t couldSend, newData, mustSend, shouldSend, led_on;
 
 loop_start:
 
         wdt_reset();
 
-        // delay to while
         delay ( 1 );
 
         // READ DIGITAL

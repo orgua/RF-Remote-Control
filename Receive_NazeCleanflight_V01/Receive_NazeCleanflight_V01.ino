@@ -1,6 +1,8 @@
 //#define USE_RADIO_RFM12
 #define USE_RADIO_RFM95
-#define USE_SPEKTRUM    // http://blog.kwarf.com/2013/08/a-look-at-the-spektrum-satellite-protocol/
+//#define USE_SPEKTRUM2048 // otherwise SPEKTRUM1024 is used
+/// IMPORTANT: dont forget to compensate (<<1) if you just want more channels, but no higher resolution
+/// http://blog.kwarf.com/2013/08/a-look-at-the-spektrum-satellite-protocol/
 
 const uint8_t   NODE_MASTER             = ( 9 );
 const uint8_t   NODE_SLAVE              = ( 10 );
@@ -11,9 +13,9 @@ const uint16_t  ANALOG_SAFEZONE         = ( 100 );	// better use of uint16 (move
 const uint16_t  ANALOG_DEADZONE         = ( 8 );	// for ignoring small drifts (around zero)
 const uint16_t  STDVALUE                = ( 512 );	// middle of [0...1023]
 
-#define         USE_LATENCYTEST
-const uint8_t   PIN_LED                 = ( 9 );        // standard: 8
+//#define         USE_LATENCYTEST
 const uint8_t   PIN_LATENCY             = ( 8 ); 	// INT 1
+const uint8_t   PIN_LED                 = ( 8 );        // standard: 8
 
 const uint32_t  CONTROL_INTERVALL_MIN   = ( 7L );
 const uint32_t  CONTROL_INTERVALL_MAX   = ( 18L );
@@ -26,14 +28,17 @@ const uint16_t  ERROR_SCALEFAK          = ( 80L ); // to get slower fallrate / h
 const uint16_t  ERROR_FALLRATE          = ( ceil ( 200.0 * ERROR_SCALEFAK * CONTROL_INTERVALL_MAX / 30000.0 ) ); // lower Throttle 200n in 30sec
 const uint16_t  ERROR_THROTTLE_MIN      = ( 350 );	// drop till this point
 
-/////////////////////  END OF CONFIG  //////////////////////////////////
+///  END OF CONFIG  ///////////////////////////////////////////////////////////////////
 
+/// Watchdog-Timer
 #include <avr/wdt.h>
 
+/// Fix for Serial-Lib (smaller Buffers)
 #define         SERIAL_TX_BUFFER_SIZE   (16)
 #define         SERIAL_RX_BUFFER_SIZE   (4)
 #define         SERIAL_BUFFER_SIZE      (16)
 
+/// Basics for RFM12-Module
 #ifdef USE_RADIO_RFM12
 #include <JeeLib.h>
 #include <RF12sio.h>
@@ -45,6 +50,14 @@ const uint8_t   HDR_SLAVE_MSG           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( 0
 const uint8_t   HDR_SLAVE_ACK           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_CTL ) ) );
 #endif // USE_RADIO_RFM12
 
+/// RFM95-Module
+#ifdef USE_RADIO_RFM95
+#include <SPI.h>
+#include <RH_RF95.h>
+RH_RF95 rf95; // Singleton instance of the radio driver
+#undef YIELD
+#define YIELD   (ps.sleep(0));
+#endif // USE_RADIO_RFM95
 
 /// PowerSaver-Lib
 #include <PowerSaver.h>
@@ -54,16 +67,7 @@ ISR ( WDT_vect )
         ++vector_wdt_called;
 };
 
-
-#ifdef USE_RADIO_RFM95
-#include <SPI.h>
-#include <RH_RF95.h>
-RH_RF95 rf95; // Singleton instance of the radio driver
-#undef YIELD
-#define YIELD   (ps.sleep(0))
-#endif // USE_RADIO_RFM95
-
-
+/// Lib for VCC-Readings
 #include <atmel_vcc.h>
 ATMEL atmel = ATMEL ();
 volatile bool adcDone;
@@ -72,11 +76,10 @@ ISR ( ADC_vect )
         adcDone = true;
 };
 
-#ifdef USE_SPEKTRUM
+/// Lib for Spektrum-Serial-Output
 #include <atmel_spektrumSerial.h>
-#endif // USE_SPEKTRUM
 
-
+/// Global Variables and Structures
 struct masterCTRL
 {
         uint8_t com;
@@ -86,13 +89,14 @@ struct masterCTRL
         uint16_t vcc;
         //uint32_t    time;
 };
-masterCTRL *msg_received; /// HIER IST EINE Ã„NDERUNG in Bezug zur Sendeversion
+masterCTRL *msg_received; /// HIER IST EINE ÄNDERUNG in Bezug zur Sendeversion
 masterCTRL msg_valid, msg_rfm95;
 const uint8_t msg_size = sizeof ( masterCTRL );
 
 uint16_t receive_errors; // use for QoS
 
-/////////////////////  PROGRAM:  //////////////////////////////////
+
+///  PROGRAM:  ////////////////////////////////////////////////////
 
 uint8_t rfm_handle ()
 {
@@ -147,7 +151,7 @@ uint8_t rfm_handle ()
 
 void setup ()
 {
-        wdt_enable (WDTO_1S);
+        wdt_enable ( WDTO_1S );
 
         ps.turnOffTWI ();
         ps.turnOffTimer1 ();
@@ -200,11 +204,11 @@ void setup ()
 #define REG_MODEM_CONFIG3           0x26
 #define     MSK_LOW_DATARATE_OPTI   (B00001000) // Mandatory when symbollength > 16ms
 #define     MSK_AGC_AUTO_ON         (B00000100)
-        RH_RF95::ModemConfig conf = {0,0,0};
-        conf.reg_1d = (VAL_MODEM_BW125 | VAL_MODEM_CR1);
-        conf.reg_1e = (VAL_MODEM_SF07  | MSK_RX_PAYLOAD_CRC_ON );
-        conf.reg_26 = (MSK_AGC_AUTO_ON ); // TODO: Test
-        rf95.setModemRegisters(&conf);
+        RH_RF95::ModemConfig conf = {0, 0, 0};
+        conf.reg_1d = ( VAL_MODEM_BW125 | VAL_MODEM_CR1 );
+        conf.reg_1e = ( VAL_MODEM_SF07  | MSK_RX_PAYLOAD_CRC_ON );
+        conf.reg_26 = ( MSK_AGC_AUTO_ON ); // TODO: Test
+        rf95.setModemRegisters ( &conf );
 
         rf95.setTxPower ( 20 );               // 5 ... 23 dBm
         rf95.setPreambleLength ( 8 );
@@ -229,16 +233,15 @@ void setup ()
 
 void loop ()
 {
-
-#ifdef USE_SPEKTRUM
+        /// Spektrum-Code
         spektrum_init ();
         //#define UART_BAUD_RATE 104200   // hacker bei ROLL
 #define UART_BAUD_RATE 107500   // hacker bei ROLL
 #define UART_BAUD_SELECT ((F_CPU/UART_BAUD_RATE/16)-1)
         UBRR0L = ( ( unsigned char ) UART_BAUD_SELECT );
-        UDR0 = 0xAA;
-#endif // USE_SPEKTRUM
+        UDR0   = 0xAA;
 
+        /// static Variables
         uint16_t  errorCounter  = 0;
         uint8_t   errorDetect   = 0;
         uint8_t   mustCTRL      = 0;
@@ -249,7 +252,7 @@ void loop ()
         uint32_t  time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
         uint32_t  time2ctrl_max = loop_time + CONTROL_INTERVALL_MAX;
 
-        uint16_t  spektrumCH[12]= {STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE};
+        uint16_t  spektrumCH[12] = {STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE, STDVALUE};
 
 loop_start:
 
@@ -337,12 +340,10 @@ loop_start:
                 spektrumCH[3] = 1024 - servo[3];
                 spektrumCH[4] = servo[5];
 
-#ifdef USE_SPEKTRUM
                 spektrum_send ( spektrumCH );
-#endif // USE_SPEKTRUM
 
 #ifdef USE_LATENCYTEST
-        digitalWrite (  PIN_LATENCY, LOW );
+                digitalWrite (  PIN_LATENCY, LOW );
 #endif // USE_LATENCYTEST
 
                 time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
@@ -351,8 +352,7 @@ loop_start:
         }
 
         goto loop_start;
-
-}
+};
 
 
 
