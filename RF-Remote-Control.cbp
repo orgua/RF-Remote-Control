@@ -43,6 +43,7 @@
 		<Unit filename="ArduSensorNode.pdf" />
 		<Unit filename="README.md" />
 		<Unit filename="Receive_KKSpektrum_V01/Receive_KKSpektrum_V01.ino" />
+		<Unit filename="Receive_NazeCleanflight_V01/Receive_NazeCleanflight_V01.ino" />
 		<Unit filename="Receive_PWM_V01/Receive_PWM_V01.ino" />
 		<Unit filename="Receive_eSkate_V01/Receive_eSkate_V01.ino" />
 		<Unit filename="Repeat_V01/Repeat_V01.ino" />

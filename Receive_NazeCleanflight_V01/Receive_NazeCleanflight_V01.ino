@@ -1,5 +1,5 @@
-//#define USE_RADIO_RFM12
-#define USE_RADIO_RFM95
+#define USE_RADIO_RFM12
+//#define USE_RADIO_RFM95
 //#define USE_SPEKTRUM2048 // otherwise SPEKTRUM1024 is used
 /// IMPORTANT: dont forget to compensate (<<1) if you just want more channels, but no higher resolution
 /// http://blog.kwarf.com/2013/08/a-look-at-the-spektrum-satellite-protocol/
@@ -50,6 +50,7 @@ const uint8_t   HDR_SLAVE_MSG           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( 0
 const uint8_t   HDR_SLAVE_ACK           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_CTL ) ) );
 #endif // USE_RADIO_RFM12
 
+/*
 /// RFM95-Module
 #ifdef USE_RADIO_RFM95
 #include <SPI.h>
@@ -58,6 +59,7 @@ RH_RF95 rf95; // Singleton instance of the radio driver
 #undef YIELD
 #define YIELD   (ps.sleep(0));
 #endif // USE_RADIO_RFM95
+*/
 
 /// PowerSaver-Lib
 #include <PowerSaver.h>
@@ -89,11 +91,19 @@ struct masterCTRL
         uint16_t vcc;
         //uint32_t    time;
 };
-masterCTRL *msg_received; /// HIER IST EINE ÄNDERUNG in Bezug zur Sendeversion
+masterCTRL *msg_received; /// HIER IST EINE ï¿½NDERUNG in Bezug zur Sendeversion
 masterCTRL msg_valid, msg_rfm95;
 const uint8_t msg_size = sizeof ( masterCTRL );
 
 uint16_t receive_errors; // use for QoS
+
+
+// TEMPORARY
+#include    <Servo.h>
+#define     SERVOMIN    1000
+#define     SERVOMID    1500
+#define     SERVOMAX    2000
+Servo       servoA;
 
 
 ///  PROGRAM:  ////////////////////////////////////////////////////
@@ -154,8 +164,8 @@ void setup ()
         wdt_enable ( WDTO_1S );
 
         ps.turnOffTWI ();
-        ps.turnOffTimer1 ();
-        ps.turnOffTimer2 ();
+        //ps.turnOffTimer1 ();
+        //ps.turnOffTimer2 ();
         ps.turnOffDigitalInput ();
 
         ps.sleep ( 1 ); // wait for rfm-startup
@@ -228,6 +238,10 @@ void setup ()
         pinMode (       PIN_LATENCY, OUTPUT );
         digitalWrite (  PIN_LATENCY, LOW );
 #endif // USE_LATENCYTEST
+
+  pinMode(5, OUTPUT);
+  servoA.attach(5,SERVOMIN,SERVOMAX);
+  servoA.writeMicroseconds(SERVOMAX);
 }
 
 
@@ -349,6 +363,8 @@ loop_start:
                 time2ctrl_min = loop_time + CONTROL_INTERVALL_MIN;
                 time2ctrl_max = loop_time + CONTROL_INTERVALL_MAX;
                 mustCTRL = 0;
+                
+                servoA.writeMicroseconds(SERVOMID - ((servo[5] - 512)*1.2));
         }
 
         goto loop_start;
