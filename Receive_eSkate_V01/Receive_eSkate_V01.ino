@@ -1,38 +1,38 @@
 #define USE_RADIO
-#define USE_SERIAL    // for debug
+//#define USE_SERIAL    // for debug
 #define USE_PWM
-//#define USE_BRAKES
+#define USE_BRAKES
 
-#define NODE_MASTER             13  // MMM = 11, III = 13
-#define NODE_SLAVE              (NODE_MASTER+1)
+constexpr uint8_t  NODE_MASTER      = 13;  // MMM = 11, III = 13
+constexpr uint8_t  NODE_SLAVE       = (NODE_MASTER+1);
 
-#define ANALOG_CHANNELS         1       // nr of channels
-#define ANALOG_JITTER           2       // small changes won't trigger fast sending
-#define ANALOG_SAFEZONE         100     // better use of uint16 (move away from 0)
-#define ANALOG_DEADZONE         30      // for ignoring small drifts (around zero)
+constexpr uint8_t  ANALOG_CHANNELS  = 1;       // nr of channels
+constexpr uint8_t  ANALOG_JITTER    = 2;       // small changes won't trigger fast sending
+constexpr uint8_t  ANALOG_SAFEZONE  = 100;     // better use of uint16 (move away from 0)
+constexpr uint8_t  ANALOG_DEADZONE  = 30;      // for ignoring small drifts (around zero)
 
 #ifdef USE_BRAKES
-#define STDVALUE                1640
+constexpr uint16_t STDVALUE         = 1520;
 #else
-#define STDVALUE                1120
+constexpr uint16_t STDVALUE         = 1120;
 #endif // USE_BRAKES
 
 #define USE_VCCSTARTCHECK
-#define VCC_MIN                 2500 // mV
+constexpr uint16_t  VCC_MIN         = 2500; // mV
 
-#define PIN_LED                 8
-#define PIN_PWM                 A3
+constexpr uint8_t  PIN_LED          = 8;
+#define PIN_PWM          A3
 
 #ifdef USE_SERIAL
-#define CONTROL_INTERVALL_MIN   50      // for debug
-#define CONTROL_INTERVALL_MAX   500
+constexpr uint16_t CONTROL_INTERVALL_MIN    = 50;      // for debug
+constexpr uint16_t CONTROL_INTERVALL_MAX    = 500;
 #else
-#define CONTROL_INTERVALL_MIN   10      // 7-10 produziert stottern
-#define CONTROL_INTERVALL_MAX   50     // test: 20/50
+constexpr uint16_t CONTROL_INTERVALL_MIN    = 10;      // 7-10 produziert stottern
+constexpr uint16_t CONTROL_INTERVALL_MAX    = 50;     // test: 20/50
 #endif // USE_SERIAL
 
-#define ERROR_TIME_MS           3000L //
-#define ERROR_THRESHOLD         (ERROR_TIME_MS/CONTROL_INTERVALL_MAX) // 60
+constexpr uint16_t ERROR_TIME_MS            = 3000; //
+constexpr uint16_t ERROR_THRESHOLD          = (ERROR_TIME_MS/CONTROL_INTERVALL_MAX); // 60
 
 /////////////////////  END OF CONFIG  //////////////////////////////////
 
@@ -40,16 +40,16 @@
 ISR(WDT_vect)
 {
     Sleepy::watchdogEvent();
-}   // this must be defined since we're using the watchdog for low-power waiting
+};   // this must be defined since we're using the watchdog for low-power waiting
 
 #ifdef USE_RADIO
 #include <RF12sio.h>
 RF12    RF12;
-#define SEND_MODE               2   // set to 3 if fuses are e=06/h=DE/l=CE, else set to 2
-#define HDR_MASTER_MSG          ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_DST|0))  // |RF12_HDR_ACK if you want an ACK
-#define HDR_MASTER_ACK          ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_CTL|RF12_HDR_DST))
-#define HDR_SLAVE_MSG           ((NODE_SLAVE&RF12_HDR_MASK)|(0))
-#define HDR_SLAVE_ACK           ((NODE_SLAVE&RF12_HDR_MASK)|(RF12_HDR_CTL))
+constexpr uint8_t   SEND_MODE               = ( 2 ); // set to 3 if fuses are e=06/h=DE/l=CE, else set to 2
+constexpr uint8_t   HDR_MASTER_MSG          = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_DST | 0 ) ) ); // |RF12_HDR_ACK if you want an ACK
+constexpr uint8_t   HDR_MASTER_ACK          = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_CTL | RF12_HDR_DST ) ) );
+constexpr uint8_t   HDR_SLAVE_MSG           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( 0 ) ) );
+constexpr uint8_t   HDR_SLAVE_ACK           = ( ( ( NODE_SLAVE&RF12_HDR_MASK ) | ( RF12_HDR_CTL ) ) );
 #endif // USE_RADIO
 
 #include <atmel_vcc.h>
@@ -62,9 +62,9 @@ ISR(ADC_vect)
 
 #ifdef      USE_PWM
 #include    <Servo.h>
-#define     SERVOS      1
-#define     SERVOMIN    800
-#define     SERVOMAX    2400
+constexpr uint8_t  SERVOS       = 1;
+constexpr uint16_t SERVOMIN     = 1000;
+constexpr uint16_t SERVOMAX     = 2000;
 Servo       servoA;
 #endif      // USE_PWM
 
@@ -79,7 +79,7 @@ struct masterCTRL
 };
 masterCTRL* msg_received;
 masterCTRL  msg_valid;
-uint8_t     msg_size = sizeof(msg_valid);
+constexpr uint8_t     msg_size = sizeof(msg_valid);
 
 uint16_t    receive_errors; // use for QoS
 
@@ -138,14 +138,16 @@ void setup()
     msg_received = (masterCTRL*) rf12_data;
 #endif // USE_RADIO
 
+#ifdef USE_PWM
     servoA.attach(PIN_PWM,SERVOMIN,SERVOMAX);
+#endif
 
     for (uint8_t ivar = 0; ivar < ANALOG_CHANNELS; ivar++)
     {
         msg_valid.analog[ivar] = 0;
     }
     msg_valid.digital = 0;
-    msg_valid.counter = 255; // correct errorrate-values
+    msg_valid.counter = 255; // correct errorRate-values
 
     pinMode(        PIN_LED, OUTPUT);
     digitalWrite(   PIN_LED, HIGH);
@@ -154,14 +156,12 @@ void setup()
 
 void loop()
 {
-    uint32_t        time2ctrl_min = 0, time2ctrl_max = 0;
-    static uint16_t errorCounter = 0;
-    uint16_t        servo, servoPT;
-    uint8_t         been_zero, brake_mode;
+    uint32_t        time2ctrl_min(0), time2ctrl_max(0);
+    static uint16_t errorCounter(0);
 
 loop_start:
 
-    uint8_t         dataValid = 0;
+    uint8_t         dataValid(0);
 
     if (rf12_recvDone())
     {
@@ -175,10 +175,9 @@ loop_start:
         }
     }
 
-    static uint8_t  mustCTRL = 0, canCTRL = 0;
-    static uint32_t loop_time;
+    static uint8_t  mustCTRL(0), canCTRL(0);
 
-    loop_time     = millis();
+    uint32_t loop_time = millis();
     if (loop_time >= time2ctrl_max)     mustCTRL = 1;
     if (loop_time >= time2ctrl_min)     canCTRL  = 1;
 
@@ -192,48 +191,55 @@ loop_start:
 
     if (mustCTRL)
     {
+        uint16_t        servo(STDVALUE);
+        static uint16_t analogPT(1024);
+        static bool     been_zero(0), brake_mode(1);
         if (errorCounter > ERROR_THRESHOLD)
         {
             // place safe value
             msg_valid.digital       = 255; // turn on brakes
             msg_valid.analog[0]     = 1; // switch to stable Mode!
+            analogPT				= 1;
             servo                   = 1;
 
             msg_valid.counter       = 255; // correct errorrate-values
         }
         else    errorCounter++; // will reset if valid paket comes in
 
-        servoPT = (servoPT + msg_valid.analog[0])>>1; // PT-Smoothing
+        analogPT = (analogPT + msg_valid.analog[0])>>1; // PT-Smoothing
 
-        if (servoPT < ANALOG_DEADZONE)
+        if (msg_valid.analog[0] < ANALOG_DEADZONE)
         {
             // power-value is below the threshold
             been_zero   = 1;
             // set the standard servo-output
-            servoPT     = 0;
-            servo       = 0;
+            analogPT    = 0;
+            servo       = STDVALUE;
             // decide if we want to break or accelerate
             if (msg_valid.digital)  brake_mode = 0;
             else                    brake_mode = 1;
 
         }
-        else
+        else if (been_zero)
         {
-            // power-value is above the threshold
-            if (been_zero==1)   been_zero = 0;
+            // analog-value is above the threshold and value has been low/zero
+
             // The Maik-Magic happens here!
+            uint16_t analogDZ = analogPT - ANALOG_DEADZONE;
 #ifdef USE_BRAKES
-            if (brake_mode==1)  servo = 1460 - (servoPT>>1);
-            else                servo = 1650 + (servoPT>>2) + (servoPT>>1);
+            if (brake_mode)  servo = STDVALUE - (analogDZ>>2) - (analogDZ>>1);
+            else             servo = STDVALUE + (analogDZ>>2) + (analogDZ>>1);
 #else
-            if (brake_mode==1)  servo = 0;
-            else                servo = STDVALUE + servoPT - ANALOG_DEADZONE;
+            if (brake_mode)  servo = STDVALUE;
+            else             servo = STDVALUE + analogDZ;
 #endif
 
         }
 
+#ifdef USE_PWM
         servoA.writeMicroseconds(servo); // TODO: has to be between 1100 and 1900, now: 1250
-        
+#endif
+		
 #ifdef USE_SERIAL
     Serial.print(msg_valid.com);
     Serial.print(" : ");
